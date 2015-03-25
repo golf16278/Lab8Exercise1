@@ -71,6 +71,12 @@ public class MessageActivity extends ActionBarActivity implements Runnable {
 
     @Override
     public void run() {
+
+        LoadMessageTask task = new LoadMessageTask();
+        timestamp = 0;
+        task.execute();
+
+
     }
 
     @Override
@@ -106,6 +112,13 @@ public class MessageActivity extends ActionBarActivity implements Runnable {
         //noinspection SimplifiableIfStatement
         if (id == R.id.action_refresh) {
 
+            LoadMessageTask task = new LoadMessageTask();
+            timestamp = 0;
+            task.execute();
+
+            handler.removeCallbacks(this);
+            handler.postDelayed(this, 30000);
+
             return true;
         }
 
@@ -132,7 +145,7 @@ public class MessageActivity extends ActionBarActivity implements Runnable {
                 int response = h.getResponseCode();
                 if (response == 200) {
                     reader = new BufferedReader(new InputStreamReader(h.getInputStream()));
-                    while((line = reader.readLine()) != null) {
+                    while ((line = reader.readLine()) != null) {
                         buffer.append(line);
                     }
 
@@ -145,7 +158,22 @@ public class MessageActivity extends ActionBarActivity implements Runnable {
                     //item.put("message", m);
                     //data.add(0, item);
                     JSONObject json = new JSONObject(buffer.toString());
+                    JSONArray msg = json.getJSONArray("msg");
 
+                    timestamp = json.getInt("timestamp");
+
+                    //int oldtimestamp = json.getInt("timestamp");
+
+                    if (json.getString("response").equals("true")) {
+
+                        for (int i = 0; i < msg.length(); i++) {
+                            Map<String, String> item = new HashMap<String, String>();
+                            item.put("user", msg.getJSONObject(i).getString("user"));
+                            item.put("message", msg.getJSONObject(i).getString("message"));
+                            data.add(0, item);
+                        }
+                        return true;
+                    }
                 }
             } catch (MalformedURLException e) {
                 Log.e("LoadMessageTask", "Invalid URL");
@@ -181,6 +209,34 @@ public class MessageActivity extends ActionBarActivity implements Runnable {
             HttpClient h = new DefaultHttpClient();
             HttpPost p = new HttpPost("http://ict.siit.tu.ac.th/~cholwich/microblog/post.php");
 
+            List<NameValuePair> values = new ArrayList<NameValuePair>();
+            values.add(new BasicNameValuePair("user", user));
+            values.add(new BasicNameValuePair("message", message));
+
+            try {
+                p.setEntity(new UrlEncodedFormEntity(values));
+                HttpResponse response = h.execute(p);
+                BufferedReader reader = new BufferedReader( new InputStreamReader(response.getEntity().getContent()));
+
+                while((line = reader.readLine()) != null) {
+                    buffer.append(line);
+                }
+
+                JSONObject json = new JSONObject(buffer.toString());
+
+                if(json.getBoolean("response")){
+                    return true;
+                }
+
+            } catch (UnsupportedEncodingException e) {
+                Log.e("Error", "Invalid encoding");
+            } catch (ClientProtocolException e) {
+                Log.e("Error", "Error in posting a message");
+            } catch (IOException e) {
+                Log.e("Error", "I/O Exception");
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
 
 
             return false;
@@ -193,6 +249,9 @@ public class MessageActivity extends ActionBarActivity implements Runnable {
                         "Successfully post your status",
                         Toast.LENGTH_SHORT);
                 t.show();
+                LoadMessageTask task = new LoadMessageTask();
+                timestamp = 0;
+                task.execute();
             }
             else {
                 Toast t = Toast.makeText(MessageActivity.this.getApplicationContext(),
